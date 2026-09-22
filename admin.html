@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ApexTrade Admin Dashboard</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { background-color: #0b0e14; color: #fff; font-family: sans-serif; padding: 20px; }
+        h1, h2 { color: #00e676; }
+        .card { background: #151a23; border: 1px solid #232a36; border-radius: 10px; padding: 15px; margin-bottom: 20px; }
+        input, button { padding: 10px; border-radius: 6px; border: 1px solid #232a36; margin: 5px 0; }
+        input { background: #0b0e14; color: #fff; width: 100%; box-sizing: border-box; }
+        button { background: #2962ff; color: #fff; font-weight: bold; cursor: pointer; border: none; width: 100%; }
+        button:hover { background: #00e676; color: #000; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }
+        th, td { border: 1px solid #232a36; padding: 8px; text-align: left; }
+        th { background: #1e2638; color: #00e676; }
+        .badge-pending { color: #ffab00; font-weight: bold; }
+        .badge-done { color: #00e676; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>⚡ Admin Dashboard - ApexTrade</h1>
+
+    <div class="card">
+        <h2>🛠️ Modifye Solde Itilizatè</h2>
+        <input type="text" id="admin-user-id" placeholder="ID Telegram itilizatè a">
+        <input type="number" id="admin-depot-amount" placeholder="Nouvo Montant Dépôt ($)">
+        <input type="number" id="admin-profit-amount" placeholder="Nouvo Montant Profit ($)">
+        <button onclick="updateUserBalance()">Mete Solde a ajou</button>
+    </div>
+
+    <div class="card">
+        <h2>💸 Demann Retrait</h2>
+        <button onclick="loadWithdrawals()" style="background:#26a17b; margin-bottom:10px;">Rafrechi Retrait Yo</button>
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Username</th>
+                    <th>Montant</th>
+                    <th>Adrès BEP20</th>
+                    <th>Statut</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="withdrawals-list"></tbody>
+        </table>
+    </div>
+
+    <div class="card">
+        <h2>👥 Lis Tout Itilizatè Yo</h2>
+        <button onclick="loadAllUsers()" style="background:#2962ff; margin-bottom:10px;">Chaje Lis Itilizatè Yo</button>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Dépôt</th>
+                    <th>Profit</th>
+                    <th>Filleuls</th>
+                </tr>
+            </thead>
+            <tbody id="users-list"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+          apiKey: "AIzaSyBHPnGTW_K_H5AWKOi3ot3M7rZnf0KqqTQ",
+          authDomain: "apextradenetbot.firebaseapp.com",
+          databaseURL: "https://apextradenetbot-default-rtdb.firebaseio.com",
+          projectId: "apextradenetbot",
+          storageBucket: "apextradenetbot.firebasestorage.app",
+          messagingSenderId: "450660039283",
+          appId: "1:450660039283:web:6a11507c45b79d477f4806",
+          measurementId: "G-JEC2BP9W7C"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        function updateUserBalance() {
+            let uId = document.getElementById('admin-user-id').value.trim();
+            let depot = parseFloat(document.getElementById('admin-depot-amount').value);
+            let profit = parseFloat(document.getElementById('admin-profit-amount').value);
+
+            if(!uId) {
+                alert("Tanpri antre ID itilizatè a!");
+                return;
+            }
+
+            let updates = {};
+            if(!isNaN(depot)) updates['users/' + uId + '/depot'] = depot;
+            if(!isNaN(profit)) updates['users/' + uId + '/profit'] = profit;
+
+            database.ref().update(updates).then(() => {
+                alert("Solde itilizatè " + uId + " mete ajou ak siksè!");
+                loadAllUsers();
+            }).catch(err => alert("Erreur: " + err.message));
+        }
+
+        function loadWithdrawals() {
+            database.ref('withdrawals').once('value', (snapshot) => {
+                let tbody = document.getElementById('withdrawals-list');
+                tbody.innerHTML = '';
+                snapshot.forEach((child) => {
+                    let w = child.val();
+                    let key = child.key;
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${w.userId || 'N/A'}</td>
+                        <td>${w.username || 'N/A'}</td>
+                        <td>$${parseFloat(w.amount).toFixed(2)}</td>
+                        <td style="font-size:10px;">${w.address}</td>
+                        <td class="${w.status === 'pending' ? 'badge-pending' : 'badge-done'}">${w.status}</td>
+                        <td>
+                            ${w.status === 'pending' ? `<button style="padding:4px; font-size:10px;" onclick="approveWithdrawal('${key}')">Valider</button>` : 'OK'}
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        function approveWithdrawal(key) {
+            database.ref('withdrawals/' + key + '/status').set('completed').then(() => {
+                alert("Retrait valide!");
+                loadWithdrawals();
+            });
+        }
+
+        function loadAllUsers() {
+            database.ref('users').once('value', (snapshot) => {
+                let tbody = document.getElementById('users-list');
+                tbody.innerHTML = '';
+                snapshot.forEach((child) => {
+                    let u = child.val();
+                    let id = child.key;
+                    let tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${id}</td>
+                        <td>${u.username || 'N/A'}</td>
+                        <td>$${parseFloat(u.depot || 0).toFixed(2)}</td>
+                        <td>$${parseFloat(u.profit || 0).toFixed(2)}</td>
+                        <td>${u.ref_count || 0}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            });
+        }
+
+        loadWithdrawals();
+        loadAllUsers();
+    </script>
+</body>
+</html>
